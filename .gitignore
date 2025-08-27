@@ -1,0 +1,15 @@
+# build artifacts
+build/
+install/
+log/
+*.pyc
+__pycache__/
+# ROS 2
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+# VSCode
+.vscode/
+# Bags & maps via LFS
+*.bag *.bag.active *.bag2
+maps/**/*
