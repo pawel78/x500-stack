@@ -1,0 +1,2 @@
+# Placeholder for your tuned params (load via QGroundControl)
+# e.g., COM_ARM_WO_GPS, MPC_*, PWM_MAIN_* min/max, BAT1_*
