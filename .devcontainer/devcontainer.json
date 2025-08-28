@@ -1,7 +1,10 @@
 {
   "name": "x500-stack",
-  "build": { "dockerfile": "../docker/ros2-px4.Dockerfile" },
+  "build": {
+    "context": "..",
+    "dockerfile": "../docker/ros2-px4.Dockerfile"
+  },
   "workspaceFolder": "/workspaces/x500-stack",
-  "mounts": ["source=${localWorkspaceFolder},target=/workspaces/x500-stack,type=bind"],
-  "postCreateCommand": "bash scripts/setup_px4_toolchain.sh"
+  "postCreateCommand": "bash scripts/setup_px4_toolchain.sh",
+  "remoteUser": "root"
 }
