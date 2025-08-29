@@ -30,3 +30,8 @@ print("jsonschema:", jsonschema.__file__)
 print("genmsg:", genmsg.__file__)
 print("kconfiglib:", getattr(kconfiglib, "__file__", "?"))
 PY
+
+# ---- Git LFS ----
+apt-get install -y git-lfs
+git lfs install --force
+git lfs update --force
