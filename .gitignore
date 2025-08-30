@@ -23,3 +23,10 @@ log/
 *.bag
 *.bag2
 maps/**/*
+*.db3
+data/**/extracted/
+data/**/frames/
+results/**/frames/
+docs/research/**/.DS_Store
+docs/research/**/annotations/
+docs/research/**/zotero/
