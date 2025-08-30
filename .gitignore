@@ -11,8 +11,8 @@ ros2_ws/install/
 ros2_ws/log/
 
 # PX4 build artifacts (submodule cleans these, but ignore here too)
-firmware/PX4-Autopilot/build/
-firmware/PX4-Autopilot/log/
+platforms/pixhawk/px4/build/
+platforms/pixhawk/px4/log/
 
 # General build/log
 build/

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-SUBS=( firmware/PX4-Autopilot )
+SUBS=( platforms/pixhawk/px4 )
 for S in "${SUBS[@]}"; do
   if [ -d "$S/.git" ]; then
     echo "Cleaning $S ..."

@@ -9,18 +9,59 @@ Primary working branch: **[`feat/px6x-firmware`](https://github.com/pawel78/x500
 
 ```
 x500-stack/
-├─ .devcontainer/            # VS Code dev container config (Linux toolchain on macOS via Colima)
-├─ docker/                   # Dockerfile used by the dev container
-├─ firmware/
-│  └─ PX4-Autopilot/         # PX4 source code (Git submodule pinned to release tag)
-├─ scripts/
-│  ├─ setup_px4_toolchain.sh # Installs ARM toolchain + Python deps + Git LFS
-│  ├─ build_px6x.sh          # Clean + build Pixhawk 6X firmware
-│  ├─ flash_px6x.sh          # Upload firmware over USB
-│  └─ clean_submodules.sh    # Reset PX4 submodule state
+├─ .devcontainer/                    # VS Code Dev Container config
+├─ docker/                           # Base images used by the dev container
 ├─ config/
-│  └─ params/                # QGC parameter files (airframe tuning, etc.)
-├─ maps/                     # (optional) mapping artifacts (LFS tracked)
+│  ├─ params/                        # QGC parameter files
+│  ├─ topics_caltech.yaml            # Caltech CART topic map (analysis)
+│  └─ topics_x500.yaml               # X500 topic map (analysis)
+├─ platforms/
+│  ├─ scripts/                       # single home for all scripts/CLIs
+│  │  ├─ setup_px4_toolchain.sh      # toolchain/deps bootstrap inside container
+│  │  ├─ build_px6x.sh               # build Pixhawk 6X firmware (cross-compile)
+│  │  ├─ flash_px6x.sh               # flash firmware over USB (or use QGC)
+│  │  ├─ convert_ros1_to_ros2.py     # analysis helpers (bags → ROS 2)
+│  │  ├─ extract_ros1.py
+│  │  ├─ extract_ros2.py
+│  │  ├─ run_mapping.py
+│  │  └─ run_fire_detection.py
+│  ├─ jetson/                        # Jetson-only deployment & config
+│  │  ├─ docker/                     # app images / compose
+│  │  ├─ ros2/                       # launch overlays, params
+│  │  ├─ system/                     # udev, systemd, nvpmodel, jetson_clocks
+│  │  ├─ setup/                      # provisioning / first-boot / Ansible
+│  │  ├─ configs/                    # device-local IDs/paths
+│  │  └─ README.md
+│  └─ pixhawk/
+│     ├─ px4/                        # PX4 submodule lives here
+│     ├─ params/                     # vehicle .params you flash
+│     ├─ airframe/
+│     └─ wiring/                     # pinouts, serial maps
+├─ src/
+│  └─ x500proc/                      # reusable Python package for processing
+├─ data/
+│  ├─ caltech_cart/                  # Caltech Aerial RGB-Thermal dataset
+│  │  ├─ raw_ros1_bags/
+│  │  ├─ converted_ros2/
+│  │  └─ extracted/
+│  └─ x500_logs/                     # flight logs (ROS 2)
+│     ├─ ros2_bags/
+│     ├─ extracted/
+│     └─ sessions/
+├─ notebooks/
+│  ├─ pawel/
+│  └─ zach/
+├─ results/
+│  ├─ mapping/
+│  └─ fire_detection/
+├─ docs/
+│  └─ research/                      # references, standards, summaries
+│     ├─ papers/  standards/  patents/  datasets/  summaries/  bibtex/
+│     ├─ reading-log.md
+│     └─ README.md
+├─ maps/                             # mapping artifacts (LFS)
+├─ .gitattributes
+├─ .gitignore
 └─ README.md
 ```
 
@@ -28,16 +69,16 @@ x500-stack/
 
 ## Submodules & Pinning Strategy
 
-PX4 lives under `firmware/PX4-Autopilot` as a **Git submodule**.  
+PX4 lives under `platforms/pixhawk/px4` as a **Git submodule**.  
 A submodule is basically a “repo within a repo,” pinned at a specific commit. We **pin PX4** to a **stable release tag** (currently `v1.15.0`) to guarantee reproducible builds.
 
 **Updating PX4 to a new release:**
 ```bash
-git -C firmware/PX4-Autopilot fetch --tags
-git -C firmware/PX4-Autopilot checkout v1.16.0
-git -C firmware/PX4-Autopilot submodule update --init --recursive
-git -C firmware/PX4-Autopilot clean -fdx
-git add firmware/PX4-Autopilot
+git -C platforms/pixhawk/px4 fetch --tags
+git -C platforms/pixhawk/px4 checkout v1.16.0
+git -C platforms/pixhawk/px4 submodule update --init --recursive
+git -C platforms/pixhawk/px4 clean -fdx
+git add platforms/pixhawk/px4
 git commit -m "chore(px4): bump PX4 to v1.16.0 for Pixhawk 6X"
 ```
 
@@ -69,22 +110,22 @@ colima start --cpu 6 --memory 16 --disk 60   # start Linux VM
 git submodule update --init --recursive
 
 # Install toolchain & deps
-./scripts/setup_px4_toolchain.sh
+./platforms/scripts/setup_px4_toolchain.sh
 
 # Build
-./scripts/build_px6x.sh
+./platforms/scripts/build_px6x.sh
 
 # Firmware output:
-# firmware/PX4-Autopilot/build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4
+# platforms/pixhawk/px4/build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4
 ```
 
 **Flashing**  
 - On macOS: open QGroundControl and drag-drop the `.px4` artifact.  
-- On Linux: run `./scripts/flash_px6x.sh` with Pixhawk connected via USB.
+- On Linux: run `./platforms/scripts/flash_px6x.sh` with Pixhawk connected via USB.
 
 **Cleanup (PX4 submodule junk):**
 ```bash
-./scripts/clean_submodules.sh
+./platforms/scripts/clean_submodules.sh
 ```
 
 ---
@@ -153,31 +194,3 @@ git lfs update --force
 - **Git LFS push error**: `git lfs install && git lfs update --force`
 
 ---
-
-## Branch & PR Flow
-
-- Develop on feature branches (e.g., `feat/px6x-firmware`).
-- Push and open PRs to `main`.  
-- Merge only after build passes and SITL/flight test validated.
-
----
-
-## Quick Start
-
-```bash
-# open container
-code .
-
-# rebuild container
-Cmd+Shift+P → Dev Containers: Rebuild and Reopen in Container
-
-# inside container
-./scripts/setup_px4_toolchain.sh
-./scripts/build_px6x.sh
-```
-
-Firmware will be at:
-```
-firmware/PX4-Autopilot/build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4
-```
-Flash it via QGroundControl (macOS) or `./scripts/flash_px6x.sh` (Linux).
