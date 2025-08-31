@@ -5,3 +5,5 @@ data/**/converted_ros2/** filter=lfs diff=lfs merge=lfs -text
 docs/research/papers/**    filter=lfs diff=lfs merge=lfs -text
 docs/research/patents/**   filter=lfs diff=lfs merge=lfs -text
 docs/research/standards/** filter=lfs diff=lfs merge=lfs -text
+maps/**              filter=lfs diff=lfs merge=lfs -text
+maps/**              filter=lfs diff=lfs merge=lfs -text
