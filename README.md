@@ -102,7 +102,50 @@ colima start --cpu 6 --memory 16 --disk 60   # start Linux VM
 3. Terminal prompt should be `/workspaces/x500-stack` and `uname -a` should show Linux.
 
 ---
+## Daily Usage with Colima and Docker
 
+This project uses Colima as the Docker runtime on macOS.  Af ther one-time setup instructions, follow these steps for everyday container work.
+
+### Start Colima
+Make sure the coliman VM is running before working with containers
+```bash
+colima start
+```
+Check status:
+```bash
+colimna status
+```
+Expected status output
+```bash
+INFO colima is running
+```
+If it says `stopped`, run `colima start` again.
+
+### Confirm Docker is using Colima
+Colima installs its own Docker context. Verify with:
+```bash
+docker context show
+```
+You should see:
+```bash
+colima
+```
+### List Containers
+Show all (running and stopped) containers:
+```bash
+docker ps -a
+```
+### Start or Restart a Container
+if you container is stopped and you want to restart it with logs and keep STDIN open
+```bash
+docker start -ai <container_name_or_id>
+```
+### Exec into a Running Container
+If you want to open the shell inside the container and do work, this will be the most common use-case do:
+```bash
+docker -exec -it <container_id_or_name> /bin/bash
+```
+---
 ## Building PX4 for Pixhawk 6X
 
 ```bash
