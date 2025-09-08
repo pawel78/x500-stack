@@ -143,7 +143,7 @@ docker start -ai <container_name_or_id>
 ### Exec into a Running Container
 If you want to open the shell inside the container and do work, this will be the most common use-case do:
 ```bash
-docker -exec -it <container_id_or_name> /bin/bash
+docker exec -it <container_id_or_name> /bin/bash
 ```
 ---
 ## Building PX4 for Pixhawk 6X
