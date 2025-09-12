@@ -1,155 +1,118 @@
-# OpenVINS (ov_msckf) – Offline VIO on a ROS1 Bag (macOS/Linux, ROS Noetic)
+# Running Visual–Inertial Odometry (OpenVINS) on ROS Bags in Docker
 
-This README walks you through running **OpenVINS (ov_msckf)** offline on a recorded **ROS1** bag that contains:
-- a monocular camera stream (e.g. `/eo/color/image_color` or `/.../compressed`)
-- an IMU stream (e.g. `/imu/data`)
-
-We’ll build OpenVINS in a Catkin workspace, republish compressed images to raw (if needed), launch OpenVINS with a custom config, and play your bag. Works well inside Docker or a native Noetic install.
+This document describes how to run our VIO + mapping pipeline inside Docker, with host data mounted into the container.
 
 ---
 
-## 0) What you’ll need
-
-- **ROS Noetic** environment (native or Docker).
-- A rosbag with:
-  - Camera topic (raw or compressed), e.g.  
-    `/eo/color/image_color` or `/eo/color/image_color/compressed`
-  - IMU topic, e.g. `/imu/data`
-- (Recommended) Camera intrinsics and IMU parameters (Kalibr or vendor specs). You can start with guesses, but accurate calibration improves results.
+## 1. Prerequisites
+- **Docker Desktop** installed (macOS with Apple Silicon is fine; we’ll run x86 emulation).
+- ROS Noetic–based container image with OpenVINS built (e.g. `my-ros:noetic-vio`).
+- Bag files stored under:
+  ```
+  /Users/pawel/x500-stack/maps/bags
+  ```
 
 ---
 
-## 1) Create and build the workspace
+## 2. Start the container
+
+Run from the host:
 
 ```bash
-# ROS env
+docker run --platform=linux/amd64 -it --rm   --name ros_vio   -v /Users/pawel/x500-stack/maps:/datasets   -v /Users/pawel/x500-stack/ws_openvins:/ws_openvins   --memory=12g --cpus=6   my-ros:noetic-vio bash
+```
+
+- `/datasets` → maps + bags mounted from host
+- `/ws_openvins` → Catkin workspace on host
+- `--platform=linux/amd64` → ensures Noetic image runs on Apple Silicon
+- `--memory/--cpus` → optional resource limits
+
+---
+
+## 3. Source ROS and workspace
+
+Inside the container:
+
+```bash
 source /opt/ros/noetic/setup.bash
-
-# Create workspace
-mkdir -p ~/ws_openvins/src
-cd ~/ws_openvins/src
-
-# Clone OpenVINS
-git clone https://github.com/rpng/open_vins.git
-
-# Install dependencies
-cd ~/ws_openvins
-rosdep install --from-paths src --ignore-src -y
-
-# Build
-catkin_make -DCMAKE_BUILD_TYPE=Release
-
-# Source the workspace (do this in every new shell before launching)
-source ~/ws_openvins/devel/setup.bash
-
-# Sanity check that ROS can find the package
-rospack find ov_msckf
+cd /ws_openvins
+catkin_make -DCMAKE_BUILD_TYPE=Release   # only needed first time
+source devel/setup.bash
 ```
-
-> If `rospack find ov_msckf` fails, re-check the build output and re-source `setup.bash`.
 
 ---
 
-## 2) Prepare a minimal config (estimator_config.yaml)
+## 4. Verify bag access
 
-Create your dataset config folder and a minimal config file:
+Check your bags are visible:
 
 ```bash
-mkdir -p ~/ws_openvins/src/open_vins/config/my_dataset
-nano ~/ws_openvins/src/open_vins/config/my_dataset/estimator_config.yaml
+ls -la /datasets/bags
 ```
 
-Paste this template and **adjust values** (intrinsics, distortion, resolution):
-
-```yaml
-# === OpenVINS minimal mono-inertial config ===
-# Topics (we'll republish /compressed -> /ov_cam0/image_raw below)
-cam0_topic: /ov_cam0/image_raw
-imu0_topic: /imu/data
-
-# Camera model & intrinsics (replace with your calibration)
-cam0_model: pinhole-equi
-cam0_intrinsics: [460.0, 460.0, 320.0, 240.0]   # [fx, fy, cx, cy]
-cam0_distortion: [0.0, 0.0, 0.0, 0.0]          # [k1, k2, r1, r2]
-cam0_resolution: [640, 480]                    # width, height
-cam0_timeshift: 0.0
-
-# IMU noise params (start reasonable; refine later)
-imu_noise_gyro: 0.001
-imu_noise_accel: 0.01
-imu_bias_gyro: 0.0001
-imu_bias_accel: 0.001
-
-# Mono vs stereo
-use_stereo: false
-max_cameras: 1
-
-verbosity: INFO
+Expected:
+```
+2022-12-20-12-48-59.bag
+...
 ```
 
 ---
 
-## 3) If images are **compressed**, republish to raw
+## 5. Run VIO pipeline (multi-terminal workflow)
 
-Install transports and run a republisher so OpenVINS gets a raw stream:
+We need four concurrent ROS processes:
 
+1. **roscore**
+   ```bash
+   roscore
+   ```
+
+2. **Republish compressed → raw images**  
+   (skip if your bag already has `/.../image_raw`)
+   ```bash
+   rosrun image_transport republish compressed      in:=/eo/color/image_color raw out:=/ov_cam0/image_raw
+   ```
+
+3. **Play the bag**
+   ```bash
+   rosparam set use_sim_time true
+   rosbag play /datasets/bags/2022-12-20-12-48-59.bag --clock --pause
+   ```
+
+4. **Launch OpenVINS**
+   ```bash
+   roslaunch ov_msckf subscribe.launch      dobag:=false      use_stereo:=false      max_cameras:=1      config_path:=/ws_openvins/src/open_vins/config/my_dataset/estimator_config.yaml
+   ```
+
+---
+
+## 6. Managing terminals
+
+Options:
+- Open 4 separate shells (`docker exec -it ros_vio bash` for each).
+- Or, use **tmux** inside the container to split into panes:
+  ```bash
+  tmux new-session \; split-window -h \; split-window -v \; select-pane -t 0 \; split-window -v
+  ```
+
+---
+
+## 7. Output trajectory
+
+To save poses:
 ```bash
-# In Terminal A
-source /opt/ros/noetic/setup.bash
-source ~/ws_openvins/devel/setup.bash
-sudo apt-get update && sudo apt-get install -y   ros-noetic-image-transport ros-noetic-compressed-image-transport
-
-# Republish /compressed -> /ov_cam0/image_raw
-rosrun image_transport republish compressed   in:=/eo/color/image_color raw out:=/ov_cam0/image_raw
+rostopic echo -p /ov_msckf/poseimu > /datasets/vio_trajectory.csv
 ```
 
 ---
 
-## 4) Launch OpenVINS with `subscribe.launch` (no internal bag playback)
+## 8. Stopping
 
-```bash
-# In Terminal B
-source /opt/ros/noetic/setup.bash
-source ~/ws_openvins/devel/setup.bash
-
-# Use sim time for bag playback
-rosparam set use_sim_time true
-
-# Launch OpenVINS, point at your config file
-roslaunch ov_msckf subscribe.launch   dobag:=false   config_path:=/root/ws_openvins/src/open_vins/config/my_dataset/estimator_config.yaml   use_stereo:=false max_cameras:=1 verbosity:=INFO
-```
+- Detach tmux: `Ctrl+b d`
+- Kill tmux session: `tmux kill-server`
+- Exit container: `exit` (on all shells)  
+- If you didn’t use `--rm`, you can also `docker stop ros_vio`
 
 ---
 
-## 5) Play your rosbag
-
-```bash
-# In Terminal C
-source /opt/ros/noetic/setup.bash
-rosbag play /path/to/your_recording.bag --clock --pause
-```
-
----
-
-## 6) Save the trajectory
-
-```bash
-rostopic echo -p /ov_msckf/poseimu > /work/openvins_pose.csv
-```
-
----
-
-## 7) Troubleshooting
-
-- **“Launch file not found”** → Use `subscribe.launch` (your repo doesn’t have `euroc_*.launch`).  
-- **No tracking** → Confirm topics exist (`rosbag info your.bag`).  
-- **Images are compressed** → Ensure republisher is running and YAML points to `/ov_cam0/image_raw`.  
-- **Workspace not found** → Rebuild and re-source `~/ws_openvins/devel/setup.bash`.  
-
----
-
-## 8) Notes
-
-- Accurate calibration via **Kalibr** strongly recommended.  
-- Stereo supported (`use_stereo:=true`).  
-- Outputs: CSV, TUM, KITTI — you can add a small node to export in those formats.  
+✅ With this setup, you can restart any time by repeating step **2**, and your bags/workspace are always available under `/datasets` and `/ws_openvins`.
