@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# ROS 2 colcon outputs
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# PX4 build artifacts (submodule cleans these, but ignore here too)
+platforms/pixhawk/px4/build/
+platforms/pixhawk/px4/log/
+
+# General build/log
+build/
+install/
+log/

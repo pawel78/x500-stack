@@ -1,0 +1,3 @@
+[submodule "platforms/pixhawk/px4"]
+	path = platforms/pixhawk/px4
+	url = https://github.com/PX4/PX4-Autopilot.git
